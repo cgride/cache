@@ -93,19 +93,19 @@ namespace cgride::cache
     /**
      * @brief Compare two cache keys.
      */
-    [[nodiscard]] friend bool operator==(const CacheKey &lhs,
+    friend bool operator==(const CacheKey &lhs,
                                          const CacheKey &rhs) noexcept;
 
     /**
      * @brief Compare two cache keys.
      */
-    [[nodiscard]] friend bool operator!=(const CacheKey &lhs,
+    friend bool operator!=(const CacheKey &lhs,
                                          const CacheKey &rhs) noexcept;
 
     /**
      * @brief Order cache keys by value.
      */
-    [[nodiscard]] friend bool operator<(const CacheKey &lhs,
+    friend bool operator<(const CacheKey &lhs,
                                         const CacheKey &rhs) noexcept;
 
   private:

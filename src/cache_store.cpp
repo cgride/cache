@@ -16,10 +16,12 @@
 #include <cgride/cache/cache_store.hpp>
 
 #include <chrono>
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 #include <string>
 #include <system_error>
+#include <type_traits>
 #include <utility>
 
 #include <cgride/core/error.hpp>
@@ -47,17 +49,99 @@ namespace cgride::cache
       return CacheEntry::TimePoint(std::chrono::milliseconds(value));
     }
 
+    using FileTimeRep = std::filesystem::file_time_type::duration::rep;
+
     [[nodiscard]] std::filesystem::file_time_type file_time_from_count(
-        std::filesystem::file_time_type::duration::rep value) noexcept
+        FileTimeRep value) noexcept
     {
       return std::filesystem::file_time_type(
           std::filesystem::file_time_type::duration(value));
     }
 
-    [[nodiscard]] std::filesystem::file_time_type::duration::rep file_time_count(
+    [[nodiscard]] FileTimeRep file_time_count(
         std::filesystem::file_time_type time) noexcept
     {
       return time.time_since_epoch().count();
+    }
+
+    [[nodiscard]] std::string file_time_count_to_string(FileTimeRep value)
+    {
+      if (value == 0)
+      {
+        return "0";
+      }
+
+      const auto negative = value < 0;
+      using UnsignedRep = std::make_unsigned_t<FileTimeRep>;
+      auto remaining = negative
+                           ? static_cast<UnsignedRep>(-(value + 1)) + 1
+                           : static_cast<UnsignedRep>(value);
+
+      std::string output;
+
+      while (remaining != 0)
+      {
+        const auto digit = static_cast<unsigned int>(remaining % 10);
+        output.push_back(static_cast<char>('0' + digit));
+        remaining /= 10;
+      }
+
+      if (negative)
+      {
+        output.push_back('-');
+      }
+
+      std::reverse(output.begin(), output.end());
+      return output;
+    }
+
+    [[nodiscard]] cgride::core::Result<FileTimeRep> parse_file_time_rep(
+        const std::string &value,
+        const std::string &field)
+    {
+      if (value.empty())
+      {
+        return Error(
+            ErrorCode::InvalidArgument,
+            "Invalid numeric cache entry field.",
+            field);
+      }
+
+      const bool negative = value.front() == '-';
+      std::size_t index = negative ? 1 : 0;
+
+      if (index == value.size())
+      {
+        return Error(
+            ErrorCode::InvalidArgument,
+            "Invalid numeric cache entry field.",
+            field);
+      }
+
+      using UnsignedRep = std::make_unsigned_t<FileTimeRep>;
+      UnsignedRep result = 0;
+
+      for (; index < value.size(); ++index)
+      {
+        const auto character = value[index];
+
+        if (character < '0' || character > '9')
+        {
+          return Error(
+              ErrorCode::InvalidArgument,
+              "Invalid numeric cache entry field.",
+              field);
+        }
+
+        result = static_cast<UnsignedRep>(result * 10 + static_cast<UnsignedRep>(character - '0'));
+      }
+
+      if (negative)
+      {
+        return static_cast<FileTimeRep>(-static_cast<FileTimeRep>(result));
+      }
+
+      return static_cast<FileTimeRep>(result);
     }
 
     [[nodiscard]] std::string bool_to_string(bool value)
@@ -133,21 +217,11 @@ namespace cgride::cache
       }
     }
 
-    [[nodiscard]] cgride::core::Result<std::filesystem::file_time_type::duration::rep>
-    parse_file_time_count(const std::string &value, const std::string &field)
+    [[nodiscard]] cgride::core::Result<FileTimeRep> parse_file_time_count(
+        const std::string &value,
+        const std::string &field)
     {
-      try
-      {
-        return static_cast<std::filesystem::file_time_type::duration::rep>(
-            std::stoll(value));
-      }
-      catch (...)
-      {
-        return Error(
-            ErrorCode::InvalidArgument,
-            "Invalid numeric cache entry field.",
-            field);
-      }
+      return parse_file_time_rep(value, field);
     }
 
     [[nodiscard]] cgride::core::Result<void> ensure_directories(
@@ -233,8 +307,8 @@ namespace cgride::cache
                << '\n';
         stream << "input." << index << ".last_write_time="
                << (input.has_last_write_time()
-                       ? file_time_count(input.last_write_time().value())
-                       : 0)
+                       ? file_time_count_to_string(file_time_count(input.last_write_time().value()))
+                       : std::string("0"))
                << '\n';
         stream << "input." << index << ".has_content_hash="
                << bool_to_string(input.has_content_hash())

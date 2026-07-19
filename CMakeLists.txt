@@ -2,7 +2,7 @@ cmake_minimum_required(VERSION 3.22)
 
 project(
   cgride-cache
-  VERSION 0.1.0
+  VERSION 0.1.1
   DESCRIPTION "Local cache keys, file signatures and cache entry metadata store for Cgride."
   HOMEPAGE_URL "https://github.com/cgride/cache"
   LANGUAGES CXX
